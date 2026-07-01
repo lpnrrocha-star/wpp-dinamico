@@ -1,0 +1,27 @@
+name: WPPConnect Auto Updater
+
+on:
+  schedule:
+    # Roda a cada 1 hora automaticamente
+    - cron: '0 * * * *'
+  workflow_dispatch: # Permite rodar manualmente no botão
+
+jobs:
+  update-wpp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Baixar a versão mais recente do WPPConnect
+        run: |
+          curl -sL https://cdn.jsdelivr.net/npm/@wppconnect/wa-js@latest/dist/wpp.js -o wpp.js
+
+      - name: Salvar (Commit) as atualizações
+        run: |
+          git config --global user.name "Robô Wa Seller"
+          git config --global user.email "robo@waseller.com"
+          git add wpp.js
+          
+          # Se o arquivo baixado tiver mudanças, o robô salva. Se for igual ao atual, ele não faz nada.
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: nova versão do wpp.js baixada com sucesso!" && git push)
