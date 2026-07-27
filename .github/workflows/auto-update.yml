@@ -1,27 +1,115 @@
-name: WPPConnect Auto Updater
+name: Atualizar WPPConnect distribuído
 
 on:
   schedule:
-    # Roda a cada 1 hora automaticamente
-    - cron: '0 * * * *'
-  workflow_dispatch: # Permite rodar manualmente no botão
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: atualizar-wpp-distribuido
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  update-wpp:
+  sync:
+    name: Verificar versão estável oficial
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - name: Checkout do Repositório
+      - name: Baixar o repositório
         uses: actions/checkout@v4
 
-      - name: Baixar a versão mais recente do WPPConnect
-        run: |
-          curl -sL https://cdn.jsdelivr.net/npm/@wppconnect/wa-js@latest/dist/wpp.js -o wpp.js
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Salvar (Commit) as atualizações
+      - name: Baixar e validar o pacote oficial
+        id: update
+        shell: bash
         run: |
-          git config --global user.name "Robô Wa Seller"
-          git config --global user.email "robo@waseller.com"
-          git add wpp.js
-          
-          # Se o arquivo baixado tiver mudanças, o robô salva. Se for igual ao atual, ele não faz nada.
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: nova versão do wpp.js baixada com sucesso!" && git push)
+          set -euo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/waseller-wpp"
+          mkdir -p "${WORK_DIR}/package"
+
+          npm pack @wppconnect/wa-js@latest \
+            --json \
+            --pack-destination "${WORK_DIR}" > "${WORK_DIR}/pack.json"
+
+          PACKAGE_FILE="$(node -p "require('${WORK_DIR}/pack.json')[0].filename")"
+          VERSION="$(node -p "require('${WORK_DIR}/pack.json')[0].version")"
+          INTEGRITY="$(node -p "require('${WORK_DIR}/pack.json')[0].integrity")"
+
+          tar -xzf "${WORK_DIR}/${PACKAGE_FILE}" -C "${WORK_DIR}/package"
+          CANDIDATE="${WORK_DIR}/package/package/dist/wppconnect-wa.js"
+
+          node --check "${CANDIDATE}"
+          grep -Fq "wppconnect-team/wa-js v${VERSION}" "${CANDIDATE}"
+          grep -Fq "self.WPP" "${CANDIDATE}"
+
+          SIZE="$(stat -c%s "${CANDIDATE}")"
+          if [ "${SIZE}" -lt 102400 ] || [ "${SIZE}" -gt 15728640 ]; then
+            echo "Tamanho inesperado do WA-JS: ${SIZE} bytes" >&2
+            exit 1
+          fi
+
+          SHA256="$(sha256sum "${CANDIDATE}" | cut -d' ' -f1)"
+          SOURCE="https://registry.npmjs.org/@wppconnect/wa-js/-/wa-js-${VERSION}.tgz"
+
+          cp "${CANDIDATE}" "${WORK_DIR}/wpp.js"
+          VERSION="${VERSION}" \
+          INTEGRITY="${INTEGRITY}" \
+          SHA256="${SHA256}" \
+          SOURCE="${SOURCE}" \
+          node -e "
+            const fs = require('node:fs');
+            const manifest = {
+              schemaVersion: 1,
+              package: '@wppconnect/wa-js',
+              channel: 'latest',
+              version: process.env.VERSION,
+              source: process.env.SOURCE,
+              integrity: process.env.INTEGRITY,
+              artifact: 'dist/wppconnect-wa.js',
+              sha256: process.env.SHA256,
+              publishedAt: new Date().toISOString()
+            };
+            fs.writeFileSync(
+              '${WORK_DIR}/wpp_version.json',
+              JSON.stringify(manifest, null, 2) + '\n'
+            );
+          "
+
+          if [ -f wpp.js ] \
+            && [ -f wpp_version.json ] \
+            && cmp -s "${WORK_DIR}/wpp.js" wpp.js \
+            && node -e "
+              const current = require('./wpp_version.json');
+              const next = require('${WORK_DIR}/wpp_version.json');
+              process.exit(
+                current.version === next.version && current.sha256 === next.sha256 ? 0 : 1
+              );
+            "; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          mv "${WORK_DIR}/wpp.js" wpp.js
+          mv "${WORK_DIR}/wpp_version.json" wpp_version.json
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publicar os arquivos na raiz
+        if: steps.update.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "Robô Wa Seller"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add wpp.js wpp_version.json
+          git commit -m "Auto-update: WA-JS v${{ steps.update.outputs.version }} validado"
+          git push
