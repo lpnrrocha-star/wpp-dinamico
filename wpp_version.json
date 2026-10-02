@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "package": "@wppconnect/wa-js",
   "channel": "latest",
-  "version": "4.6.0",
-  "source": "https://registry.npmjs.org/@wppconnect/wa-js/-/wa-js-4.6.0.tgz",
-  "integrity": "sha512-epf+ucZO9c25dCaGraslVNHB1mRjid7rfijZhKbalXed/gbDzi6u69wdHCgPbcZW9McVpKmVW+3AzffI39p2SQ==",
+  "version": "4.6.1",
+  "source": "https://registry.npmjs.org/@wppconnect/wa-js/-/wa-js-4.6.1.tgz",
+  "integrity": "sha512-vabRop+7EN2Ny0f6suB5jY9Gmrkclo2yvaaw4zinEH5UUNUiyb7cTnSuK0rknYUde4ElKSjpThJFV0J+220chA==",
   "artifact": "dist/wppconnect-wa.js",
-  "sha256": "5bfb88027f14a4d8c9e319374e8bb4083201906881cf8c74f75789b32e4106bd",
-  "publishedAt": "2026-08-14T22:38:46.537Z"
+  "sha256": "813ccb4e3641f594e8cab463f477741ce804904d6b8fca936c7360b1a9b6bacd",
+  "publishedAt": "2026-10-02T15:46:54.961Z"
 }
